@@ -2,26 +2,36 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <!-- Meta responsive / PWA -->
+
+  <!-- Rendu responsive / PWA -->
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>💼 Générateur de Facture</title>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png"
+        href="https://raw.githubusercontent.com/LeLordMD/Facture-DRONE-X-PLORE/main/icon-512.png">
+
   <!-- Manifest PWA -->
   <link rel="manifest" href="/manifest.json">
+
   <!-- Service Worker -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js')
-          .then(reg => console.log('Service Worker enregistré', reg))
+          .then(reg => console.log('SW enregistré', reg))
           .catch(err => console.error('Erreur SW', err));
       });
     }
   </script>
+
   <!-- html2pdf.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
   <!-- Firebase v8 -->
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
   <style>
     /* ===== Global & Container ===== */
     body {
@@ -43,6 +53,7 @@
       font-size: 24px;
       text-align: center;
       margin-bottom: 20px;
+      color: navy;
     }
     label {
       display: block;
@@ -72,20 +83,20 @@
       margin-top: 20px;
       border: none;
       border-radius: 4px;
-      background: #007bff;
+      background: navy;
       color: #fff;
       cursor: pointer;
       box-sizing: border-box;
     }
     button:hover {
-      background: #0056b3;
+      background: #000080;
     }
     #copyAdresseBtn {
       width: auto;
       font-size: 18px;
       padding: 10px;
       background: none;
-      color: #007bff;
+      color: navy;
       margin: 16px 0;
     }
 
@@ -107,9 +118,7 @@
     #addrSuggestions {
       position: absolute;
       z-index: 10;
-      left: 0;
-      right: 0;
-      top: 100%;
+      left: 0; right: 0; top: 100%;
       background: #fff;
       border: 1px solid #ddd;
       border-radius: 4px;
@@ -128,16 +137,20 @@
       background: #f0f6ff;
     }
 
-    /* ---------------------- */
-    /* PDF layout and styling */
-    /* ---------------------- */
+    /* ============================== */
+    /* PDF layout, background & footer */
+    /* ============================== */
     .invoice {
       width: 200mm;
-      min-height: 297mm;
-      padding: 5mm 15mm 0 0;
+      height: 290mm;
+      padding: 5mm 15mm 25mm 15mm; /* espace réservé pour footer */
       margin: 0;
       box-sizing: border-box;
-      background: #fff;
+      background-color: #fff;
+      background-image: url('https://raw.githubusercontent.com/LeLordMD/Facture-DRONE-X-PLORE/main/ton-logo.png');
+      background-repeat: no-repeat;
+      background-position: center center;
+      background-size: 80%;
       position: relative;
       font-size: 12pt;
       line-height: 1.4;
@@ -191,7 +204,10 @@
       font-weight: bold;
     }
     .pdf-footer {
-      margin-top: 20px;
+      position: absolute;
+      bottom: 15mm;
+      left: 15mm;
+      right: 15mm;
       display: flex;
       justify-content: space-between;
       font-size: 10pt;
@@ -221,7 +237,7 @@
     <label for="adresse">Adresse</label>
     <div class="suggestions">
       <input type="text" id="adresse" autocomplete="off"
-             placeholder="Ex: 10 rue de la République"
+             placeholder="Ex : 10 rue de la République"
              oninput="autocompleteAdresse(this.value)">
       <ul id="addrSuggestions"></ul>
     </div>
@@ -248,7 +264,7 @@
       </div>
     </div>
 
-    <button id="copyAdresseBtn" title="Copier l’adresse → Lieu">↔</button>
+    <button id="copyAdresseBtn" title="Copier → Lieu">↔</button>
 
     <label for="lieu">Lieu</label>
     <input type="text" id="lieu" autocomplete="off">
@@ -286,11 +302,17 @@
       </div>
       <div>
         <label for="iban">IBAN</label>
-        <input type="text" id="iban" placeholder="FR76 1027 8089 1200 0206 1130 159">
+        <input type="text"
+               id="iban"
+               value="FR76 1027 8089 1200 0206 1130 159"
+               placeholder="FR76 XXXX XXXX XXXX XXXX XXXX XXX">
       </div>
       <div>
         <label for="bic">BIC</label>
-        <input type="text" id="bic" placeholder="CMCIFR2A">
+        <input type="text"
+               id="bic"
+               value="CMCIFR2A"
+               placeholder="XXXXXXXXXXX">
       </div>
     </div>
 
@@ -316,11 +338,11 @@
     <div class="pdf-title">FACTURE</div>
 
     <div class="pdf-info">
-      <p><span class="label">Numéro de facturation :</span> <span id="pdfNumFacture"></span></p>
-      <p><span class="label">Date de facturation :</span> <span id="pdfDateFacture"></span></p>
-      <p><span class="label">Date de l’intervention :</span> <span id="pdfDateIntervention"></span></p>
-      <p><span class="label">Lieu de l’intervention :</span> <span id="pdfLieu"></span></p>
-      <p><span class="label">N° de parcelle :</span> <span id="pdfParcelle"></span></p>
+      <p><span class="label">Numéro :</span> <span id="pdfNumFacture"></span></p>
+      <p><span class="label">Date facturation :</span> <span id="pdfDateFacture"></span></p>
+      <p><span class="label">Date intervention :</span> <span id="pdfDateIntervention"></span></p>
+      <p><span class="label">Lieu :</span> <span id="pdfLieu"></span></p>
+      <p><span class="label">Parcelle nº :</span> <span id="pdfParcelle"></span></p>
     </div>
 
     <table class="pdf-table">
@@ -346,7 +368,7 @@
           <td id="rowPrixHa"></td>
         </tr>
         <tr>
-          <td>Prix total</td>
+          <td>Total</td>
           <td></td>
           <td></td>
           <td id="rowPrixTotal"></td>
@@ -356,11 +378,7 @@
 
     <table class="pdf-table">
       <thead>
-        <tr>
-          <th>Mode de paiement</th>
-          <th>IBAN</th>
-          <th>BIC</th>
-        </tr>
+        <tr><th>Moyen</th><th>IBAN</th><th>BIC</th></tr>
       </thead>
       <tbody>
         <tr>
@@ -372,18 +390,19 @@
     </table>
 
     <p><br><br>En vous remerciant de votre confiance.<br>Cordialement.</p>
+
     <div class="pdf-footer">
       <div class="pdf-footer-left">
-        <strong>N° de SIRET :</strong> 894 329 564 00013
+        N° de SIRET : 894 329 564 00013
       </div>
       <div class="pdf-footer-right">
-        DRONE X-PLORE.
+        DRONE X-PLORE
       </div>
     </div>
   </div>
 
   <script>
-    // --- 1) Initialisation Firebase
+    // Init Firebase
     const firebaseConfig = {
       apiKey: "AIzaSyCRO_KlygXQ3TkaAXfBDSxrxY5rA4bZCtc",
       authDomain: "drone-traitement-vigne.firebaseapp.com",
@@ -397,178 +416,157 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // --- 2) Enregistrer la facture dans Realtime Database
-    function enregistrerFactureBD(num) {
-      const data = {
-        numFacture: num,
-        nom:    document.getElementById('nom').value.trim().toUpperCase(),
-        prenom: (() => {
-          const v = document.getElementById('prenom').value.trim();
-          return v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : '';
-        })(),
-        adresse:  document.getElementById('adresse').value.trim(),
-        cp:       document.getElementById('cp').value.trim(),
-        ville:    document.getElementById('ville').value.trim(),
-        dateFacture:      document.getElementById('dateFacture').value,
-        dateIntervention: document.getElementById('dateIntervention').value,
-        lieu:      document.getElementById('lieu').value.trim(),
-        surface:   document.getElementById('surface').value,
-        unite:     document.getElementById('unite').value,
-        parcelle:  document.getElementById('parcelle').value.trim(),
-        prixHectare: document.getElementById('prixHectare').value,
-        prixTotal:   document.getElementById('prixTotal').value,
-        paiement:    document.getElementById('paiement').value,
-        iban:        document.getElementById('iban').value.trim(),
-        bic:         document.getElementById('bic').value.trim(),
-        timestamp:   new Date().toISOString()
-      };
-      return db.ref('Factures/' + num).set(data);
-    }
+    // Remplit dateFacture par défaut
+    document.getElementById('dateFacture').value =
+      new Date().toISOString().split('T')[0];
 
-    // Initialisation de la date
-    document.getElementById('dateFacture').value = new Date().toISOString().split('T')[0];
-
-    // Calcul automatique du prix total
-    ['surface','unite','prixHectare'].forEach(id => {
-      document.getElementById(id).addEventListener('input', calculeTotal);
-    });
+    // Calcul du total
+    ['surface','unite','prixHectare'].forEach(id =>
+      document.getElementById(id).addEventListener('input', calculeTotal)
+    );
     function calculeTotal() {
-      const s = parseFloat(document.getElementById('surface').value) || 0;
-      const u = document.getElementById('unite').value;
-      const p = parseFloat(document.getElementById('prixHectare').value) || 0;
-      const total = (u === 'hectare') ? s * p : s * (p / 10000);
+      const s = parseFloat(document.getElementById('surface').value)||0,
+            u = document.getElementById('unite').value,
+            p = parseFloat(document.getElementById('prixHectare').value)||0,
+            total = u==='hectare'? s*p : s*(p/10000);
       document.getElementById('prixTotal').value = total.toFixed(2);
     }
 
-    // Autocomplete d'adresse
+    // Autocomplete adresse
     const addrInput = document.getElementById('adresse'),
-          suggList  = document.getElementById('addrSuggestions');
+          suggList = document.getElementById('addrSuggestions');
     let addrAbort;
     function autocompleteAdresse(q) {
-      if (!q || q.trim().length < 3) {
-        suggList.style.display = 'none';
-        return;
-      }
+      if(!q||q.trim().length<3){ suggList.style.display='none'; return; }
       addrAbort && addrAbort.abort();
       addrAbort = new AbortController();
       fetch(
         `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5&autocomplete=1`,
         { signal: addrAbort.signal }
-      )
-      .then(r => r.json())
-      .then(data => {
+      ).then(r => r.json()).then(data => {
         suggList.innerHTML = '';
-        (data.features || []).forEach(f => {
-          const p = f.properties;
-          const li = document.createElement('li');
+        (data.features||[]).forEach(f => {
+          const p = f.properties, li = document.createElement('li');
           li.textContent = p.label;
           li.onclick = () => {
-            addrInput.value = p.name || p.label;
-            document.getElementById('cp').value    = p.postcode || '';
-            document.getElementById('ville').value = p.city     || '';
+            addrInput.value = p.name||p.label;
+            document.getElementById('cp').value = p.postcode||'';
+            document.getElementById('ville').value = p.city||'';
             suggList.style.display = 'none';
           };
           suggList.appendChild(li);
         });
         suggList.style.display = data.features.length ? 'block' : 'none';
-      })
-      .catch(() => {});
+      }).catch(()=>{});
     }
     document.addEventListener('click', e => {
-      if (!e.target.closest('.suggestions')) {
-        suggList.style.display = 'none';
-      }
+      if(!e.target.closest('.suggestions')) suggList.style.display='none';
     });
 
-    // Capitalisation du prénom
+    // Capitalisation prénom
     document.getElementById('prenom').addEventListener('blur', () => {
-      const inp = document.getElementById('prenom'),
-            v   = inp.value.trim();
-      if (v) inp.value = v.charAt(0).toUpperCase() + v.slice(1).toLowerCase();
+      const inp = document.getElementById('prenom'), v = inp.value.trim();
+      if(v) inp.value = v.charAt(0).toUpperCase() + v.slice(1).toLowerCase();
     });
 
-    // Copie Adresse → Lieu
+    // Copie adresse → lieu
     document.getElementById('copyAdresseBtn').addEventListener('click', () => {
       const a  = addrInput.value.trim(),
             cp = document.getElementById('cp').value.trim(),
             v  = document.getElementById('ville').value.trim();
-      if (a) {
-        document.getElementById('lieu').value =
-          a + ((cp && v) ? `, ${cp} ${v}` : '');
-      }
+      if(a) document.getElementById('lieu').value = a + ((cp&&v)? `, ${cp} ${v}` : '');
     });
 
-    // Génération du numéro de facture
+    // Génération numéro de facture
     function generateInvoiceNumber() {
-      const d   = new Date(),
-            y   = d.getFullYear(),
-            m   = String(d.getMonth()+1).padStart(2,'0'),
+      const d = new Date(),
+            y = d.getFullYear(),
+            m = String(d.getMonth()+1).padStart(2,'0'),
             day = String(d.getDate()).padStart(2,'0'),
             key = `seq-${y}${m}${day}`,
-            seq = String((parseInt(localStorage.getItem(key) || '0', 10) + 1))
-                    .padStart(2, '0');
-      localStorage.setItem(key, parseInt(seq, 10));
+            seq = String((parseInt(localStorage.getItem(key)||'0',10)+1)).padStart(2,'0');
+      localStorage.setItem(key, parseInt(seq,10));
       return `FAC-${y}${m}${day}${seq}`;
     }
 
-    // Génération de la facture + enregistrement + PDF
+    // Enregistrement dans Firebase
+    function enregistrerFactureBD(num) {
+      const data = {
+        numFacture: num,
+        nom: document.getElementById('nom').value.trim().toUpperCase(),
+        prenom: (() => {
+          const v = document.getElementById('prenom').value.trim();
+          return v? v.charAt(0).toUpperCase()+v.slice(1).toLowerCase() : '';
+        })(),
+        adresse: document.getElementById('adresse').value.trim(),
+        cp: document.getElementById('cp').value.trim(),
+        ville: document.getElementById('ville').value.trim(),
+        dateFacture: document.getElementById('dateFacture').value,
+        dateIntervention: document.getElementById('dateIntervention').value,
+        lieu: document.getElementById('lieu').value.trim(),
+        surface: document.getElementById('surface').value,
+        unite: document.getElementById('unite').value,
+        parcelle: document.getElementById('parcelle').value.trim(),
+        prixHectare: document.getElementById('prixHectare').value,
+        prixTotal: document.getElementById('prixTotal').value,
+        paiement: document.getElementById('paiement').value,
+        iban: document.getElementById('iban').value.trim(),
+        bic: document.getElementById('bic').value.trim(),
+        timestamp: new Date().toISOString()
+      };
+      return db.ref('Factures/'+num).set(data);
+    }
+
+    // Génère et télécharge le PDF
     async function genererFacture() {
       const num = generateInvoiceNumber();
       document.getElementById('numFacture').value = num;
 
-      // Injection dans template PDF
+      // Injection des données
       const nomVal = document.getElementById('nom').value.trim().toUpperCase();
       const preVal = (() => {
         const v = document.getElementById('prenom').value.trim();
-        return v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : '';
+        return v? v.charAt(0).toUpperCase()+v.slice(1).toLowerCase() : '';
       })();
+      document.getElementById('pdfNumFacture').textContent         = num;
+      document.getElementById('pdfNom').textContent                = nomVal;
+      document.getElementById('pdfPrenom').textContent             = preVal;
+      document.getElementById('pdfAdresse').textContent            = document.getElementById('adresse').value;
+      document.getElementById('pdfCP').textContent                 = document.getElementById('cp').value;
+      document.getElementById('pdfVille').textContent              = document.getElementById('ville').value;
+      document.getElementById('pdfDateFacture').textContent        = document.getElementById('dateFacture').value;
+      document.getElementById('pdfDateIntervention').textContent   = document.getElementById('dateIntervention').value;
+      document.getElementById('pdfLieu').textContent               = document.getElementById('lieu').value;
+      document.getElementById('pdfParcelle').textContent           = document.getElementById('parcelle').value;
+      document.getElementById('rowSurfaceQty').textContent         = document.getElementById('surface').value;
+      document.getElementById('rowSurfaceUnit').textContent        = document.getElementById('unite').value;
+      document.getElementById('rowPrixHa').textContent             = parseFloat(document.getElementById('prixHectare').value).toFixed(2);
+      document.getElementById('rowPrixTotal').textContent          = document.getElementById('prixTotal').value;
+      document.getElementById('rowPaiement').textContent           = document.getElementById('paiement').value;
+      document.getElementById('rowIBAN').textContent               = document.getElementById('iban').value;
+      document.getElementById('rowBIC').textContent                = document.getElementById('bic').value;
 
-      document.getElementById('pdfNumFacture').textContent      = num;
-      document.getElementById('pdfNom').textContent            = nomVal;
-      document.getElementById('pdfPrenom').textContent         = preVal;
-      document.getElementById('pdfAdresse').textContent        = document.getElementById('adresse').value;
-      document.getElementById('pdfCP').textContent             = document.getElementById('cp').value;
-      document.getElementById('pdfVille').textContent          = document.getElementById('ville').value;
-      document.getElementById('pdfDateFacture').textContent    = document.getElementById('dateFacture').value;
-      document.getElementById('pdfDateIntervention').textContent= document.getElementById('dateIntervention').value;
-      document.getElementById('pdfLieu').textContent           = document.getElementById('lieu').value;
-      document.getElementById('pdfParcelle').textContent       = document.getElementById('parcelle').value;
-
-      const surface = document.getElementById('surface').value;
-      const unite   = document.getElementById('unite').value;
-      const prixHa  = parseFloat(document.getElementById('prixHectare').value).toFixed(2);
-      const prixTot = document.getElementById('prixTotal').value;
-
-      document.getElementById('rowSurfaceQty').textContent   = surface;
-      document.getElementById('rowSurfaceUnit').textContent  = unite;
-      document.getElementById('rowPrixHa').textContent       = prixHa;
-      document.getElementById('rowPrixTotal').textContent    = prixTot;
-      document.getElementById('rowPaiement').textContent     = document.getElementById('paiement').value;
-      document.getElementById('rowIBAN').textContent         = document.getElementById('iban').value;
-      document.getElementById('rowBIC').textContent          = document.getElementById('bic').value;
-
-      // Enregistrement Firebase
+      // Sauvegarde en BDD
       try {
         await enregistrerFactureBD(num);
-        console.log(`Facture ${num} enregistrée.`);
-      } catch (e) {
-        console.error("Erreur enregistrement Firebase:", e);
+      } catch(e) {
+        console.error('Erreur BDD', e);
       }
 
-      // Génération du PDF
+      // Génération PDF
       const tpl = document.getElementById('facturePDF');
       tpl.style.display = 'block';
       html2pdf()
         .set({
-          margin: [0, 5, 0, 5],
-          filename: `${num}.pdf`,
-          html2canvas: { scale: 2, scrollY: 0 }
+          margin:      [0,5,0,5],
+          jsPDF:       { unit:'mm', format:'a4', orientation:'portrait' },
+          pagebreak:   { mode:['avoid-all','css'] },
+          html2canvas: { scale:2, scrollY:0 }
         })
         .from(tpl)
-        .save()
-        .then(() => { tpl.style.display = 'none'; });
+        .save(`${num}.pdf`)
+        .then(() => tpl.style.display='none');
     }
   </script>
 </body>
 </html>
-```
