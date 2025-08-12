@@ -147,7 +147,7 @@
       margin: 0;
       box-sizing: border-box;
       background-color: #fff;
-      background-image: url("https://raw.githubusercontent.com/LeLordMD/Facture-DRONE-X-PLORE/main/ton-logo.png");
+      background-image: url("https://raw.githubusercontent.com/LeLordMD/Facture-DRONE-X-PLORE/main/icons/ton-logo.png");
       background-repeat: no-repeat;
       background-position: center center;
       background-size: 80%;
@@ -156,6 +156,21 @@
       line-height: 1.4;
       display: none;
     }
+
+    .invoice #pdf-logo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
+  opacity: 0.1;
+  z-index: 0;
+}
+
+.invoice > *:not(#pdf-logo) {
+  position: relative;
+  z-index: 1;
+}
     .pdf-header {
       display: flex;
       justify-content: space-between;
@@ -321,6 +336,12 @@
 
   <!-- Template PDF caché -->
   <div id="facturePDF" class="invoice">
+    <img
+  id="pdf-logo"
+  src="icons/ton-logo.png"
+  crossOrigin="anonymous"
+  alt="Logo Drone X-Plore"
+>
     <div class="pdf-header">
       <div class="pdf-header-left">
         DRONE X-PLORE<br>
@@ -561,7 +582,7 @@
           margin:      [0,5,0,5],
           jsPDF:       { unit:'mm', format:'a4', orientation:'portrait' },
           pagebreak:   { mode:['avoid-all','css'] },
-          html2canvas: { scale:2, scrollY:0 }
+          html2canvas: { scale:2, scrollY:0, useCORS: true }
         })
         .from(tpl)
         .save(`${num}.pdf`)
