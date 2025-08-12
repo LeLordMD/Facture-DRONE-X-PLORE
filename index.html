@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+
+  <!-- Meta viewport pour responsive / PWA -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>💼 Générateur de Facture</title>
+
+  <!-- Manifest PWA -->
+  <link rel="manifest" href="/manifest.json">
+
+  <!-- Enregistrement du service worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(reg => console.log('Service Worker enregistré', reg))
+          .catch(err => console.error('Erreur SW', err));
+      });
+    }
+  </script>
+
+  <!-- html2pdf.js pour la génération du PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <!-- Firebase v8 -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0px;
+      background: #f6f6f6;
+    }
+    h1 {
+      font-size: 20px;
+    }
+    input, select {
+      width: 100%;
+      padding: 8px;
+      margin: 6px 0;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    label {
+      font-weight: bold;
+      display: block;
+      margin-top: 10px;
+    }
+    .row {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .row > div {
+      flex: 1;
+      min-width: 220px;
+    }
+    button {
+      padding: 10px 20px;
+      font-weight: bold;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .suggestions {
+      position: relative;
+    }
+    #addrSuggestions {
+      position: absolute;
+      z-index: 10;
+      left: 0; right: 0; top: 100%;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      list-style: none;
+      margin: 2px 0 0;
+      padding: 0;
+      max-height: 220px;
+      overflow: auto;
+    }
+    #addrSuggestions li {
+      padding: 8px;
+      cursor: pointer;
+    }
+    #addrSuggestions li:hover {
+      background: #f0f6ff;
+    }
+    #copyAdresseBtn {
+      font-size: 18px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      margin-top: 10px;
+      color: #007bff;
+    }
+
+    /* ---------------------- */
+    /* PDF layout and styling */
+    /* ---------------------- */
+    .invoice {
+      width: 200mm;
+      min-height: 297mm;
+      padding-left: 0mm;
+      padding-right: 15mm;
+      padding-top: 5mm;
+      margin: 0;
+      box-sizing: border-box;
+      background: #fff;
+      position: relative;
+      font-size: 12pt;
+      line-height: 1.4;
+      display: none;
+    }
+    .pdf-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 15px;
+    }
+    .pdf-header-left {
+      text-align: left;
+      font-weight: bold;
+    }
+    .pdf-header-right {
+      text-align: right;
+      margin-top: 1.2em;
+    }
+    .pdf-title {
+      background: #eee;
+      padding: 6px 0;
+      text-align: center;
+      font-size: 16pt;
+      font-weight: bold;
+      margin-bottom: 20px;
+    }
+    .pdf-info {
+      margin-bottom: 20px;
+    }
+    .pdf-info p {
+      margin: 4px 0;
+    }
+    .pdf-info p span.label {
+      font-weight: bold;
+      width: 160px;
+      display: inline-block;
+    }
+    table.pdf-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+    table.pdf-table th,
+    table.pdf-table td {
+      border: 1px solid #444;
+      padding: 6px;
+      text-align: left;
+    }
+    table.pdf-table th {
+      background: #ddd;
+      font-weight: bold;
+    }
+    .pdf-footer {
+      position: absolute;
+      bottom: 20mm;
+      left: 20mm;
+      right: 20mm;
+      font-size: 10pt;
+      display: flex;
+      justify-content: space-between;
+    }
+    .pdf-footer-left {
+      text-align: left;
+    }
+    .pdf-footer-right {
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>💼 Générateur de Facture</h1>
+
+  <label>Numéro de facture</label>
+  <input id="numFacture" readonly placeholder="Généré automatiquement">
+
+  <label>Nom</label>
+  <input id="nom" style="text-transform:uppercase" autocomplete="off">
+
+  <label>Prénom</label>
+  <input id="prenom" autocomplete="off">
+
+  <label>Adresse</label>
+  <div class="suggestions">
+    <input id="adresse" autocomplete="off"
+           placeholder="Ex: 10 rue de la République"
+           oninput="autocompleteAdresse(this.value)">
+    <ul id="addrSuggestions"></ul>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>Code Postal</label>
+      <input id="cp" autocomplete="off">
+    </div>
+    <div>
+      <label>Ville</label>
+      <input id="ville" autocomplete="off">
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>Date de facturation</label>
+      <input id="dateFacture" type="date">
+    </div>
+    <div>
+      <label>Date de l’intervention</label>
+      <input id="dateIntervention" type="date">
+    </div>
+  </div>
+
+  <button id="copyAdresseBtn" title="Copier l’adresse → Lieu">↔</button>
+  <label>Lieu</label>
+  <input id="lieu" autocomplete="off">
+
+  <div class="row">
+    <div>
+      <label>Surface</label>
+      <input id="surface" type="number" step="0.01" min="0">
+    </div>
+    <div>
+      <label>Unité</label>
+      <select id="unite">
+        <option value="hectare">hectare</option>
+        <option value="m2">m²</option>
+      </select>
+    </div>
+  </div>
+
+  <label>Parcelle nº</label>
+  <input id="parcelle" autocomplete="off">
+
+  <label>Prix à l’hectare (€)</label>
+  <input id="prixHectare" type="number" step="0.01" value="250">
+
+  <label>Prix total (€)</label>
+  <input id="prixTotal" readonly>
+
+  <div class="row">
+    <div>
+      <label>Moyen de paiement</label>
+      <select id="paiement">
+        <option>Virement</option>
+        <option>Chèque</option>
+      </select>
+    </div>
+    <div>
+      <label>IBAN</label>
+      <input id="iban" placeholder="FR76 1027 8089 1200 0206 1130 159">
+    </div>
+    <div>
+      <label>BIC</label>
+      <input id="bic" placeholder="CMCIFR2A">
+    </div>
+  </div>
+
+  <button onclick="genererFacture()">Générer la facture</button>
+
+  <!-- Template PDF caché -->
+  <div id="facturePDF" class="invoice">
+    <div class="pdf-header">
+      <div class="pdf-header-left">
+        DRONE X-PLORE<br>
+        445 chemin de la Cula<br>
+        07300 Etables
+      </div>
+      <div class="pdf-header-right">
+        <span id="pdfNom"></span><br>
+        <span id="pdfPrenom"></span><br>
+        <span id="pdfAdresse"></span><br>
+        <span id="pdfCP"></span> <span id="pdfVille"></span>
+      </div>
+    </div>
+
+    <div class="pdf-title">FACTURE</div>
+
+    <div class="pdf-info">
+      <p><span class="label">Numéro de facturation :</span> <span id="pdfNumFacture"></span></p>
+      <p><span class="label">Date de facturation :</span> <span id="pdfDateFacture"></span></p>
+      <p><span class="label">Date de l’intervention :</span> <span id="pdfDateIntervention"></span></p>
+      <p><span class="label">Lieu de l’intervention :</span> <span id="pdfLieu"></span></p>
+      <p><span class="label">N° de parcelle :</span> <span id="pdfParcelle"></span></p>
+    </div>
+
+    <table class="pdf-table">
+      <thead>
+        <tr>
+          <th>Description</th>
+          <th>Quantité</th>
+          <th>Unité</th>
+          <th>Prix (€)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Surface</td>
+          <td id="rowSurfaceQty"></td>
+          <td id="rowSurfaceUnit"></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td>Prix à l’hectare</td>
+          <td>1</td>
+          <td>hectare</td>
+          <td id="rowPrixHa"></td>
+        </tr>
+        <tr>
+          <td>Prix total</td>
+          <td></td>
+          <td></td>
+          <td id="rowPrixTotal"></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <table class="pdf-table">
+      <thead>
+        <tr>
+          <th>Mode de paiement</th>
+          <th>IBAN</th>
+          <th>BIC</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td id="rowPaiement"></td>
+          <td id="rowIBAN"></td>
+          <td id="rowBIC"></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p><br><br>En vous remerciant de votre confiance.<br>Cordialement.</p>
+
+    <div class="pdf-footer">
+      <div class="pdf-footer-left">
+        <strong>N° de SIRET :</strong> 894 329 564 00013
+      </div>
+      <div class="pdf-footer-right">
+        DRONE X-PLORE.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- 1) Initialisation Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyCRO_KlygXQ3TkaAXfBDSxrxY5rA4bZCtc",
+      authDomain: "drone-traitement-vigne.firebaseapp.com",
+      databaseURL: "https://drone-traitement-vigne-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "drone-traitement-vigne",
+      storageBucket: "drone-traitement-vigne.firebasestorage.app",
+      messagingSenderId: "494266480932",
+      appId: "1:494266480932:web:84e794ccd1b61c23351bb1",
+      measurementId: "G-EY62N6QG3X"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // --- 2) Enregistrer la facture dans Realtime Database
+    function enregistrerFactureBD(num) {
+      const data = {
+        numFacture: num,
+        nom:    document.getElementById('nom').value.trim().toUpperCase(),
+        prenom: (()=>{
+          const v = document.getElementById('prenom').value.trim();
+          return v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : '';
+        })(),
+        adresse:  document.getElementById('adresse').value.trim(),
+        cp:       document.getElementById('cp').value.trim(),
+        ville:    document.getElementById('ville').value.trim(),
+        dateFacture:      document.getElementById('dateFacture').value,
+        dateIntervention: document.getElementById('dateIntervention').value,
+        lieu:      document.getElementById('lieu').value.trim(),
+        surface:   document.getElementById('surface').value,
+        unite:     document.getElementById('unite').value,
+        parcelle:  document.getElementById('parcelle').value.trim(),
+        prixHectare: document.getElementById('prixHectare').value,
+        prixTotal:   document.getElementById('prixTotal').value,
+        paiement:    document.getElementById('paiement').value,
+        iban:        document.getElementById('iban').value.trim(),
+        bic:         document.getElementById('bic').value.trim(),
+        timestamp:   new Date().toISOString()
+      };
+      return db.ref('Factures/' + num).set(data);
+    }
+
+    // Initialisation de la date
+    document.getElementById('dateFacture').value =
+      new Date().toISOString().split('T')[0];
+
+    // Calcul automatique du prix total
+    ['surface','unite','prixHectare'].forEach(id => {
+      document.getElementById(id).addEventListener('input', calculeTotal);
+    });
+    function calculeTotal() {
+      const s = parseFloat(document.getElementById('surface').value) || 0;
+      const u = document.getElementById('unite').value;
+      const p = parseFloat(document.getElementById('prixHectare').value) || 0;
+      const total = (u === 'hectare') ? s * p : s * (p / 10000);
+      document.getElementById('prixTotal').value = total.toFixed(2);
+    }
+
+    // Autocomplete d'adresse
+    const addrInput = document.getElementById('adresse'),
+          suggList  = document.getElementById('addrSuggestions');
+    let addrAbort;
+    function autocompleteAdresse(q) {
+      if (!q || q.trim().length < 3) {
+        suggList.style.display = 'none';
+        return;
+      }
+      addrAbort && addrAbort.abort();
+      addrAbort = new AbortController();
+      fetch(
+        `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5&autocomplete=1`,
+        { signal: addrAbort.signal }
+      )
+      .then(r => r.json())
+      .then(data => {
+        suggList.innerHTML = '';
+        (data.features || []).forEach(f => {
+          const p = f.properties;
+          const li = document.createElement('li');
+          li.textContent = p.label;
+          li.onclick = () => {
+            addrInput.value = p.name || p.label;
+            document.getElementById('cp').value    = p.postcode || '';
+            document.getElementById('ville').value = p.city     || '';
+            suggList.style.display = 'none';
+          };
+          suggList.appendChild(li);
+        });
+        suggList.style.display = data.features.length ? 'block' : 'none';
+      })
+      .catch(() => {});
+    }
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.suggestions')) {
+        suggList.style.display = 'none';
+      }
+    });
+
+    // Capitalisation du prénom
+    document.getElementById('prenom').addEventListener('blur', () => {
+      const inp = document.getElementById('prenom'),
+            v   = inp.value.trim();
+      if (v) inp.value = v.charAt(0).toUpperCase() + v.slice(1).toLowerCase();
+    });
+
+    // Copie Adresse → Lieu
+    document.getElementById('copyAdresseBtn').addEventListener('click', () => {
+      const a  = addrInput.value.trim(),
+            cp = document.getElementById('cp').value.trim(),
+            v  = document.getElementById('ville').value.trim();
+      if (a) {
+        document.getElementById('lieu').value =
+          a + ((cp && v) ? `, ${cp} ${v}` : '');
+      }
+    });
+
+    // Génération du numéro de facture
+    function generateInvoiceNumber() {
+      const d   = new Date(),
+            y   = d.getFullYear(),
+            m   = String(d.getMonth()+1).padStart(2,'0'),
+            day = String(d.getDate()).padStart(2,'0'),
+            key = `seq-${y}${m}${day}`,
+            seq = String((parseInt(localStorage.getItem(key) || '0', 10) + 1))
+                    .padStart(2, '0');
+      localStorage.setItem(key, parseInt(seq, 10));
+      return `FAC-${y}${m}${day}${seq}`;
+    }
+
+    // Génération de la facture + enregistrement + PDF
+    async function genererFacture() {
+      const num = generateInvoiceNumber();
+      document.getElementById('numFacture').value = num;
+
+      // Injection dans template PDF
+      const nomVal = document.getElementById('nom').value.trim().toUpperCase();
+      const preVal = (() => {
+        const v = document.getElementById('prenom').value.trim();
+        return v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : '';
+      })();
+
+      document.getElementById('pdfNumFacture').textContent      = num;
+      document.getElementById('pdfNom').textContent            = nomVal;
+      document.getElementById('pdfPrenom').textContent         = preVal;
+      document.getElementById('pdfAdresse').textContent        = document.getElementById('adresse').value;
+      document.getElementById('pdfCP').textContent             = document.getElementById('cp').value;
+      document.getElementById('pdfVille').textContent          = document.getElementById('ville').value;
+      document.getElementById('pdfDateFacture').textContent    = document.getElementById('dateFacture').value;
+      document.getElementById('pdfDateIntervention').textContent= document.getElementById('dateIntervention').value;
+      document.getElementById('pdfLieu').textContent           = document.getElementById('lieu').value;
+      document.getElementById('pdfParcelle').textContent       = document.getElementById('parcelle').value;
+
+      const surface = document.getElementById('surface').value;
+      const unite   = document.getElementById('unite').value;
+      const prixHa  = parseFloat(document.getElementById('prixHectare').value).toFixed(2);
+      const prixTot = document.getElementById('prixTotal').value;
+
+      document.getElementById('rowSurfaceQty').textContent   = surface;
+      document.getElementById('rowSurfaceUnit').textContent  = unite;
+      document.getElementById('rowPrixHa').textContent       = prixHa;
+      document.getElementById('rowPrixTotal').textContent    = prixTot;
+      document.getElementById('rowPaiement').textContent     = document.getElementById('paiement').value;
+      document.getElementById('rowIBAN').textContent         = document.getElementById('iban').value;
+      document.getElementById('rowBIC').textContent          = document.getElementById('bic').value;
+
+      // Enregistrement Firebase
+      try {
+        await enregistrerFactureBD(num);
+        console.log(`Facture ${num} enregistrée.`);  
+      } catch (e) {
+        console.error("Erreur enregistrement Firebase:", e);
+      }
+
+      // Génération du PDF
+      const tpl = document.getElementById('facturePDF');
+      tpl.style.display = 'block';
+
+      html2pdf()
+        .set({
+          margin: [0, 5, 0, 5],
+          filename: `${num}.pdf`,
+          html2canvas: { scale: 2, scrollY: 0 }
+        })
+        .from(tpl)
+        .save()
+        .then(() => { tpl.style.display = 'none'; });
+    }
+  </script>
+</body>
+</html>
